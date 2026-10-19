@@ -1992,12 +1992,12 @@ function SettingsSurface({
         </SettingRow>
         <div className="plugin-name-setting">
           <SettingRow
-            label={language === "ru" ? "Проект ChatGPT" : "ChatGPT project"}
-            body={language === "ru" ? "Новые задачи создаются в этом проекте. Пустое поле — обычные чаты." : "New tasks start in this project. Leave empty for ordinary chats."}
+            label="ChatGPT project"
+            body="New tasks start in this project. Leave empty for ordinary chats."
           >
             <div className="plugin-name-input">
               <input
-                aria-label={language === "ru" ? "Ссылка на проект ChatGPT" : "ChatGPT project URL"}
+                aria-label="ChatGPT project URL"
                 type="url" maxLength={2048}
                 disabled={busy || !snapshot.state.coreSetupComplete || snapshot.state.browserInteractionMode === "manual"}
                 placeholder="https://chatgpt.com/g/g-p-…/project"
@@ -2009,7 +2009,7 @@ function SettingsSurface({
           <SecondaryButton
             disabled={busy || !snapshot.state.coreSetupComplete || snapshot.state.browserInteractionMode === "manual" || projectUrl.trim() === (snapshot.state.chatgptProjectUrl || "")}
             onClick={() => void saveProject()}
-          >{language === "ru" ? "Сохранить проект" : "Save project"}</SecondaryButton>
+          >Save project</SecondaryButton>
         </div>
         <SettingRow body={copy.chooseLanguageHint} label={copy.language}>
           <LanguageMenu copy={copy} language={language} onChange={(next) => void updateLanguage(next)} />
