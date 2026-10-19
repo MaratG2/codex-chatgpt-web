@@ -57,7 +57,7 @@ const BROWSER_DESCRIPTOR_PATH = path.join(CORE_HOME, "runtime", "launcher-browse
 const BROWSER_HELPER_PATH = app.isPackaged
   ? path.join(process.resourcesPath, "runtime", "app", "browser-helper.cjs")
   : path.join(SOURCE_ROOT, ".launcher-runtime", "browser-helper.cjs");
-const GITHUB_URL = "https://github.com/miuuyy/codex-chatgpt-web";
+const GITHUB_URL = "https://github.com/MaratG2/codex-chatgpt-web";
 const X_URL = "https://x.com/miu21590";
 const CONNECTORS_URL = "https://chatgpt.com/#settings/Plugins";
 const TUNNELS_URL = "https://platform.openai.com/settings/organization/tunnels";
@@ -523,6 +523,7 @@ function syncBrowserPreferences(stateStore, config) {
   const biggerContextEnabled = config?.experimentalBiggerContext === true;
   const composerPredictionsEnabled = config?.composerPredictionsEnabled !== false;
   const useSavedChats = config?.useSavedChats !== false;
+  const chatgptProjectUrl = config?.chatgptProjectUrl || "";
   const enabled = config?.experimentalFreshConversationPerTurn === true;
   const autoApproveToolCalls = config?.autoApproveToolCalls === true;
   const current = stateStore.read();
@@ -531,7 +532,8 @@ function syncBrowserPreferences(stateStore, config) {
     || current.experimentalBiggerContext !== biggerContextEnabled;
   if (!retentionChanged && current.composerPredictionsEnabled === composerPredictionsEnabled
     && current.autoApproveToolCalls === autoApproveToolCalls
-    && current.biggerContextAvailable === biggerContextAvailable) return current;
+    && current.biggerContextAvailable === biggerContextAvailable
+    && current.chatgptProjectUrl === chatgptProjectUrl) return current;
   // Runtime restarts leave browser views alive. Retire completed chats when their
   // persistence policy changes, including changes made by the CLI.
   const retainedKeys = new Set((retentionChanged ? [...browserHost.turnTabs.values()] : [])
@@ -539,7 +541,7 @@ function syncBrowserPreferences(stateStore, config) {
       && (current.useSavedChats !== useSavedChats || tab.interactionMode === "automatic"))
     .map(tab => tab.conversationKey));
   for (const key of retainedKeys) releaseRetainedConversation(browserHost, key);
-  const state = stateStore.update({ composerPredictionsEnabled, experimentalFreshConversationPerTurn: enabled, useSavedChats, autoApproveToolCalls, biggerContextAvailable,
+  const state = stateStore.update({ composerPredictionsEnabled, experimentalFreshConversationPerTurn: enabled, useSavedChats, chatgptProjectUrl, autoApproveToolCalls, biggerContextAvailable,
     experimentalBiggerContext: biggerContextEnabled });
   send("launcher:state-changed", state);
   return state;
@@ -550,6 +552,7 @@ function registerIpc({ logger, stateStore }) {
     "launcher:setup-core", "launcher:setup-mcp", "launcher:uninstall-integration",
     "launcher:composer-predictions", "launcher:bigger-context", "launcher:skill-attachments", "launcher:fresh-conversation-per-turn",
     "launcher:use-saved-chats", "launcher:zero-risk-pro", "launcher:browser-interaction-mode",
+    "launcher:chatgpt-project-url",
     "launcher:auto-approve-tool-calls",
     "launcher:connector-name", "launcher:mcp-verify", "launcher:doctor", "launcher:cancel-turns",
     "launcher:browser-passkey-login", "launcher:browser-logout", "launcher:browser-smoke",
@@ -957,6 +960,13 @@ function registerIpc({ logger, stateStore }) {
       throw new Error("Finish or cancel active ChatGPT turns before changing browser conversation retention");
     }
     await runtimeHost.setFreshConversationPerTurn(enabled);
+    return syncBrowserPreferences(stateStore, runtimeHost.runtimeConfigSnapshot().config);
+  });
+  handle("launcher:chatgpt-project-url", async (_event, value) => {
+    if (browserHost.activeTraceId || browserHost.currentOperation()) {
+      throw new Error("Finish or cancel active ChatGPT turns before changing the project");
+    }
+    await runtimeHost.setChatGptProjectUrl(value);
     return syncBrowserPreferences(stateStore, runtimeHost.runtimeConfigSnapshot().config);
   });
   handle("launcher:use-saved-chats", async (_event, enabled) => {

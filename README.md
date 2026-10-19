@@ -1,3 +1,21 @@
+# MaratG2 maintained fork
+
+**Branch: `codex/marat-runtime`. Version: `6.1.11-marat.1`. Base: upstream v6.1.11.**
+
+This fork adds a project destination for new automatic ChatGPT tasks, retains
+existing task conversations, and disables built-in upstream updates. Runtime
+payload size/hash enforcement is disabled for local edits; authentication and
+tool permissions remain unchanged.
+
+Read **[FORK.md](FORK.md)** before building or updating. Merge upstream changes
+into our branch; do not replace it with upstream binaries. Project routing has
+not been live-tested: no tests or model calls are authorized for this change.
+
+The original project's README follows for reference. **Its download links install
+the upstream version and will not preserve this fork's changes.**
+
+---
+
 <p align="center">
   <img src="assets/readme/hero.svg" width="960" alt="Switch to web models. Stay in Codex. Your ChatGPT plan. Your workflow. Maximum capabilities.">
 </p>

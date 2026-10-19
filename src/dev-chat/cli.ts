@@ -358,6 +358,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
     const inlineSkills = takeFlag(args, "--inline-skills");
     if (skillAttachments && inlineSkills) throw new Error("Choose --skill-attachments or --inline-skills");
     const savedChats = takeFlag(args, "--saved-chats");
+    const chatgptProjectUrl = takeOption(args, "--chatgpt-project-url");
     const temporaryChats = takeFlag(args, "--temporary-chats");
     if (savedChats && temporaryChats) throw new Error("Choose --saved-chats or --temporary-chats");
     const freshConversation = takeFlag(args, "--fresh-conversation");
@@ -385,6 +386,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
       ...(skillAttachments || inlineSkills ? { experimentalSkillAttachments: skillAttachments } : {}),
       ...(freshConversation || retainedConversation ? { experimentalFreshConversationPerTurn: freshConversation } : {}),
       ...(savedChats || temporaryChats ? { useSavedChats: savedChats } : {}),
+      ...(chatgptProjectUrl !== undefined ? { chatgptProjectUrl } : {}),
       ...(tunnelId ? { tunnelId } : {}),
       ...(runtimeKeyFile ? { runtimeKeyFile } : {}),
     });

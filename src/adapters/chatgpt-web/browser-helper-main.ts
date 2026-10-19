@@ -21,6 +21,7 @@ interface RunMessage {
     turnTimeoutMs: number;
     autoApproveToolCalls: boolean;
     useSavedChats?: boolean;
+    chatgptProjectUrl?: string;
   };
   turn: {
     traceId: string;
@@ -198,6 +199,7 @@ async function run(message: RunMessage): Promise<void> {
       turnTimeoutMs: message.config.turnTimeoutMs,
       autoApproveToolCalls: message.config.autoApproveToolCalls,
       useSavedChats: message.config.useSavedChats === true,
+      chatgptProjectUrl: message.config.chatgptProjectUrl,
     },
   };
   const abortController = new AbortController();

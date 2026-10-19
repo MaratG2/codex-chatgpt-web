@@ -75,6 +75,7 @@ Setup options:
   --replace-codex-route        Reversibly replace existing Responses or Voice route settings
   --subagent-protocol MODE     compatibility-v1 (default) or native (advanced)
   --restart-service            Explicitly restart this project's daemon after an update
+  --chatgpt-project-url <url>   Start new task chats inside this ChatGPT project (empty clears)
   --login                      Refresh the stored ChatGPT login even if one exists
   --auto-approve-tool-calls    Opt in to per-call browser clicks on "Allow once" prompts
   --bigger-context             Enable experimental adaptive 1/2/6-message context
@@ -318,6 +319,8 @@ async function setupCommand(args: string[]): Promise<void> {
   const inlineSkills = takeFlag(args, "--inline-skills");
   if (skillAttachments && inlineSkills) throw new Error("Choose --skill-attachments or --inline-skills");
   const savedChats = takeFlag(args, "--saved-chats");
+  const projectUrl = takeOption(args, "--chatgpt-project-url");
+  if (projectUrl !== undefined) options.chatgptProjectUrl = projectUrl;
   const temporaryChats = takeFlag(args, "--temporary-chats");
   if (savedChats && temporaryChats) throw new Error("Choose --saved-chats or --temporary-chats");
   if (savedChats || temporaryChats) options.useSavedChats = savedChats;

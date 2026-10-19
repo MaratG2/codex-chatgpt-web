@@ -7,6 +7,7 @@ const { runtimeBundlePaths } = require("./runtime-command.cjs");
 const DEFAULT_SOURCE_WAIT_TIMEOUT_MS = 30_000;
 const DEFAULT_SOURCE_WAIT_INTERVAL_MS = 50;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const VERIFY_RUNTIME_PAYLOAD = false; // Owner-maintained fork, see FORK.md.
 
 function comparePaths(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -133,6 +134,9 @@ function validateRuntimeFile(runtimeRoot, canonicalRoot, file) {
       throw new Error(`Runtime bundle symlink escapes the bundle: ${absolutePath}`);
     }
   }
+  // Owner-maintained fork: permit local payload edits without rejecting their size/hash.
+  // Manifest shape, required files and containment remain checked. No auth/tool checks change.
+  if (!VERIFY_RUNTIME_PAYLOAD) return;
   if (metadata.size !== file.size) {
     throw new Error(`Runtime bundle file size mismatch: ${absolutePath}`);
   }

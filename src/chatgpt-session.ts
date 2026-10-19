@@ -1,10 +1,16 @@
 import type { Locator, Page } from "playwright-core";
+import { normalizeChatGptProjectUrl } from "./chatgpt-project";
 import type { ChatGptWebAccountCapabilities } from "./chatgpt-web-models";
 
 export const CHATGPT_TEMPORARY_CHAT_URL = "https://chatgpt.com/?temporary-chat=true";
 export const CHATGPT_SAVED_CHAT_URL = "https://chatgpt.com/";
 
-export function chatGptNewChatUrl(useSavedChats = false): string {
+export function chatGptNewChatUrl(useSavedChats = false, projectUrl?: string): string {
+  const project = normalizeChatGptProjectUrl(projectUrl);
+  if (project) {
+    if (!useSavedChats) throw new Error("ChatGPT projects require saved chats");
+    return project;
+  }
   return useSavedChats ? CHATGPT_SAVED_CHAT_URL : CHATGPT_TEMPORARY_CHAT_URL;
 }
 export const CHATGPT_COMPOSER_SELECTOR = [
@@ -298,10 +304,10 @@ export async function assertTemporaryChatPage(page: Page): Promise<void> {
   await assertNewChatPage(page);
 }
 
-export async function assertNewChatPage(page: Page, useSavedChats = false): Promise<void> {
+export async function assertNewChatPage(page: Page, useSavedChats = false, projectUrl?: string): Promise<void> {
   const url = new URL(page.url());
-  const expected = new URL(chatGptNewChatUrl(useSavedChats));
-  if (url.origin !== expected.origin || url.pathname !== expected.pathname
+  const expected = new URL(chatGptNewChatUrl(useSavedChats, projectUrl));
+  if (url.origin !== expected.origin || url.pathname.replace(/\/$/, "") !== expected.pathname.replace(/\/$/, "")
     || (url.searchParams.get("temporary-chat") === "true") === useSavedChats) {
     throw new Error(`ChatGPT left the requested new ${useSavedChats ? "saved" : "Temporary"} Chat surface (${page.url()})`);
   }

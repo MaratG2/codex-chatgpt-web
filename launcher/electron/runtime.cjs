@@ -1274,10 +1274,31 @@ class RuntimeHost {
     return { ...result, enabled };
   }
 
+  async setChatGptProjectUrl(value) {
+    if (typeof value !== "string" || value.length > 2048) throw new Error("Invalid ChatGPT project URL");
+    const current = this.runtimeConfigSnapshot();
+    if (!current.configured) throw new Error("Initialize the runtime before selecting a project");
+    const development = this.launcherProfile === "development";
+    const args = [
+      ...(development ? ["dev", "setup"] : ["setup"]),
+      current.mode === "full" ? "--full" : "--browser-only",
+      "--browser-host-descriptor", this.browserDescriptorPath,
+      ...this.browserInteractionArgs(), "--acknowledge-unofficial",
+      ...(development ? [] : ["--replace-codex-route", "--restart-service"]),
+      "--chatgpt-project-url", value.trim(),
+    ];
+    if (current.config?.autoApproveToolCalls === true) args.push("--auto-approve-tool-calls");
+    const options = { message: "Saving ChatGPT project", successMessage: "Project saved for new tasks", timeoutMs: CORE_SETUP_TIMEOUT_MS };
+    return development
+      ? this.runDevSetup("chatgpt-project", args, options)
+      : this.runSetup("chatgpt-project", args, options);
+  }
+
   async setUseSavedChats(enabled) {
     if (typeof enabled !== "boolean") throw new Error("Saved chat preference must be a boolean");
     const current = this.runtimeConfigSnapshot();
     if (!current.configured) throw new Error("Initialize the runtime before changing saved chats");
+    if (!enabled && current.config?.chatgptProjectUrl) throw new Error("Clear the ChatGPT project before selecting Temporary Chat");
     const development = this.launcherProfile === "development";
     const args = [
       ...(development ? ["dev", "setup"] : ["setup"]),

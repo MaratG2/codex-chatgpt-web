@@ -21,6 +21,7 @@ const DEFAULT_STATE = Object.freeze({
   experimentalSkillAttachments: false,
   experimentalFreshConversationPerTurn: false,
   useSavedChats: true,
+  chatgptProjectUrl: "",
   zeroRiskProEnabled: false,
   browserSmokePassed: false,
   browserSmokeVersion: null,

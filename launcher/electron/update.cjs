@@ -5,7 +5,8 @@ const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { pipeline } = require("node:stream/promises");
 
-const REPOSITORY = "miuuyy/codex-chatgpt-web";
+const REPOSITORY = "MaratG2/codex-chatgpt-web";
+const FORK_UPDATES_DISABLED = true;
 const RELEASE_API_URL = `https://api.github.com/repos/${REPOSITORY}/releases/latest`;
 const USER_AGENT = "codex-web-gpt-launcher-updater";
 const MAX_REDIRECTS = 5;
@@ -313,7 +314,8 @@ function createUpdateController({
 }) {
   const deps = { ...defaultDependencies(), ...dependencies };
   const supportedAsset = releaseAssetName(currentVersion, platform, arch);
-  let state = packaged && supportedAsset ? { status: "idle" } : { status: "disabled" };
+  // This fork is pinned and upgraded by merging upstream into its maintained Git branch.
+  let state = { status: "disabled" };
   let checked = false;
   let failedChecks = 0;
   let pending = null;
@@ -382,6 +384,7 @@ function createUpdateController({
   }
 
   async function beginInstall() {
+    if (FORK_UPDATES_DISABLED) throw new Error("Updates are pinned in the MaratG2 fork. Merge upstream and rebuild this branch.");
     if (pending) throw new Error("An update is already being prepared");
     if (state.status !== "available" || !candidate) throw new Error("No launcher update is available");
     if (platform === "linux") linuxUpdateInstallation();

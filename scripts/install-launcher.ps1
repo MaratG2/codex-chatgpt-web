@@ -50,11 +50,11 @@ function Resolve-LatestReleaseVersion {
   return $Tag
 }
 
-$Repository = if ($env:CODEX_WEB_GPT_REPOSITORY) { $env:CODEX_WEB_GPT_REPOSITORY } else { "miuuyy/codex-chatgpt-web" }
+$Repository = if ($env:CODEX_WEB_GPT_REPOSITORY) { $env:CODEX_WEB_GPT_REPOSITORY } else { "MaratG2/codex-chatgpt-web" }
 if ($Repository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') {
   throw "Invalid GitHub repository: $Repository"
 }
-$Version = $env:CODEX_WEB_GPT_VERSION
+$Version = if ($env:CODEX_WEB_GPT_VERSION) { $env:CODEX_WEB_GPT_VERSION } else { "6.1.11-marat.1" }
 if (-not $Version) {
   $Version = Resolve-LatestReleaseVersion -Repository $Repository
 }

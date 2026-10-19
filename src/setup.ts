@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { normalizeChatGptProjectUrl } from "./chatgpt-project";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -58,6 +59,7 @@ export interface SetupOptions {
   experimentalSkillAttachments?: boolean;
   experimentalFreshConversationPerTurn?: boolean;
   useSavedChats?: boolean;
+  chatgptProjectUrl?: string;
   zeroRiskProEnabled?: boolean;
   replaceCodexRoute?: boolean;
   preserveDisconnectedRoute?: boolean;
@@ -306,6 +308,13 @@ function baseConfig(
     config.experimentalSkillAttachments = options.experimentalSkillAttachments;
   }
   if (options.useSavedChats !== undefined) config.useSavedChats = options.useSavedChats;
+  if (options.chatgptProjectUrl !== undefined) {
+    config.chatgptProjectUrl = normalizeChatGptProjectUrl(options.chatgptProjectUrl);
+    if (config.chatgptProjectUrl) config.useSavedChats = true;
+  }
+  if (config.chatgptProjectUrl && !config.useSavedChats) {
+    throw new Error("Clear the ChatGPT project before selecting Temporary Chat");
+  }
   if (options.experimentalFreshConversationPerTurn !== undefined) {
     config.experimentalFreshConversationPerTurn = options.experimentalFreshConversationPerTurn;
   }

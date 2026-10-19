@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { normalizeChatGptProjectUrl } from "../../chatgpt-project";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { observeChatGptAttachmentUploads } from "./attachment-upload";
@@ -1463,6 +1464,7 @@ export interface ResolvedBrowserConfig {
   headed: boolean;
   autoApproveToolCalls: boolean;
   useSavedChats: boolean;
+  chatgptProjectUrl?: string;
 }
 
 export function chatGptTurnIsComplete(state: {
@@ -2240,6 +2242,7 @@ export function resolveBrowserConfig(provider: CodexProviderConfig): ResolvedBro
     headed: configured.headed !== false,
     autoApproveToolCalls: configured.autoApproveToolCalls === true,
     useSavedChats: configured.useSavedChats === true,
+    chatgptProjectUrl: normalizeChatGptProjectUrl(configured.chatgptProjectUrl),
   };
 }
 
@@ -2837,13 +2840,14 @@ export class ChatGptBrowserWorker {
     captureDiagnostic?: (checkpoint: string) => Promise<void>,
     useSavedChats = false,
     abortSignal?: AbortSignal,
+    projectUrl?: string,
   ): Promise<Locator> {
     throwIfPromptAttachmentAborted(abortSignal);
     // Launcher verification refreshes its owned page before attaching Playwright so a newly added
     // connector is present in the catalog. Navigating again here destroys that freshly hydrated
     // document and made the first verification race a second SPA bootstrap. A leased turn starts on
     // about:blank and therefore still performs exactly one navigation through this same method.
-    const targetUrl = chatGptNewChatUrl(useSavedChats);
+    const targetUrl = chatGptNewChatUrl(useSavedChats, projectUrl);
     if (page.url() !== targetUrl) {
       await withBrowserTurnAbort(page.goto(targetUrl, {
         waitUntil: "domcontentloaded",
@@ -2861,7 +2865,7 @@ export class ChatGptBrowserWorker {
     await captureDiagnostic?.("composer-ready");
     await throwIfChatGptSessionFailureAlert(page);
     await assertAuthenticatedChatGptPage(page);
-    await assertNewChatPage(page, useSavedChats);
+    await assertNewChatPage(page, useSavedChats, projectUrl);
     await captureDiagnostic?.("session-verified");
     return composer;
   }
@@ -5385,6 +5389,7 @@ export class ChatGptBrowserWorker {
             checkpoint => diagnostics.capture(page, checkpoint),
             this.config.useSavedChats,
             turn.abortSignal,
+            this.config.chatgptProjectUrl,
           ),
         );
       }
@@ -5610,6 +5615,7 @@ export class ChatGptBrowserWorker {
                 checkpoint => diagnostics.capture(page, checkpoint),
                 this.config.useSavedChats,
                 turn.abortSignal,
+                this.config.chatgptProjectUrl,
               );
               mode = await this.selectModelAndEffort(
                 page,

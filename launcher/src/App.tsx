@@ -1720,6 +1720,20 @@ function SettingsSurface({
   const currentPluginName = snapshot.connectorNames[snapshot.state.browserInteractionMode];
   const [nameSuffix, setNameSuffix] = useState(currentPluginName.slice(6));
   const [confirmNameChange, setConfirmNameChange] = useState(false);
+  const [projectUrlDraft, setProjectUrlDraft] = useState<string | null>(null);
+  const projectUrl = projectUrlDraft ?? snapshot.state.chatgptProjectUrl ?? "";
+  const saveProject = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      updateState(await api!.setChatGptProjectUrl(projectUrl));
+      setProjectUrlDraft(null);
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
   const proposedName = `Codex ${nameSuffix.trim()}`;
   useEffect(() => {
     setNameSuffix(currentPluginName.slice(6));
@@ -1972,10 +1986,31 @@ function SettingsSurface({
         <SettingRow body={copy.savedChatsBody} label={copy.savedChats}>
           <Switch
             checked={snapshot.state.useSavedChats}
-            disabled={busy || snapshot.state.coreSetupComplete !== true}
+            disabled={busy || snapshot.state.coreSetupComplete !== true || Boolean(snapshot.state.chatgptProjectUrl)}
             onChange={(checked) => void setUseSavedChats(checked)}
           />
         </SettingRow>
+        <div className="plugin-name-setting">
+          <SettingRow
+            label={language === "ru" ? "Проект ChatGPT" : "ChatGPT project"}
+            body={language === "ru" ? "Новые задачи создаются в этом проекте. Пустое поле — обычные чаты." : "New tasks start in this project. Leave empty for ordinary chats."}
+          >
+            <div className="plugin-name-input">
+              <input
+                aria-label={language === "ru" ? "Ссылка на проект ChatGPT" : "ChatGPT project URL"}
+                type="url" maxLength={2048}
+                disabled={busy || !snapshot.state.coreSetupComplete || snapshot.state.browserInteractionMode === "manual"}
+                placeholder="https://chatgpt.com/g/g-p-…/project"
+                value={projectUrl}
+                onChange={event => setProjectUrlDraft(event.target.value)}
+              />
+            </div>
+          </SettingRow>
+          <SecondaryButton
+            disabled={busy || !snapshot.state.coreSetupComplete || snapshot.state.browserInteractionMode === "manual" || projectUrl.trim() === (snapshot.state.chatgptProjectUrl || "")}
+            onClick={() => void saveProject()}
+          >{language === "ru" ? "Сохранить проект" : "Save project"}</SecondaryButton>
+        </div>
         <SettingRow body={copy.chooseLanguageHint} label={copy.language}>
           <LanguageMenu copy={copy} language={language} onChange={(next) => void updateLanguage(next)} />
         </SettingRow>
