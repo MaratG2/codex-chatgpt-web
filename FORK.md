@@ -90,3 +90,24 @@ at the owner's request. Failures must remain explicit; no SVG or paid API fallba
 Retain these additions when merging upstream; normal `build-marat.sh` includes the
 worker changes. The standalone image helper runs from the maintained source tree.
 
+## Hermes binding repair (20 October 2026)
+
+The original worker regex searched JSON-escaped prompt text. A preceding encoded
+newline (`\nHERMES_IMAGE_SESSION`) prevented its word-boundary match, silently
+omitting the binding. `hermes-image-session.ts` now extracts a whole-line marker
+from structured system/developer content before serialization and before resume
+history slicing. A typed `hermesImageSession` field travels through the daemon and
+helper protocol on each retained tool-capable turn; the prompt is not repeated.
+
+The worker writes version-2 ownership records atomically for the session and its
+leased surface, refreshing them after browser reconnection. The exporter recovers
+a missing/corrupt session index only from one matching live canonical surface
+record. It checks host PID, endpoint and CDP target; ambiguous/stale/missing
+ownership produces explicit `HERMES_IMAGE_BINDING_*` errors before generation.
+No recent-chat guessing, additional chat, model retry or SVG/API fallback is used.
+Both `cli.js` and `browser-helper.cjs` must be rebuilt/deployed for this change.
+The installation uses the lifecycle drain/shutdown protocol while idle, allowing
+the launcher supervisor to reload the daemon without restarting the browser.
+No test or model call is part of this repair; the next scheduled run is the first
+live exercise of image generation.
+

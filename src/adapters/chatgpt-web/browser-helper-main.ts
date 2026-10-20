@@ -34,6 +34,7 @@ interface RunMessage {
     retainConversation?: boolean;
     requireRetainedConversation?: boolean;
     conversationKey?: string;
+    hermesImageSession?: string;
     compaction?: boolean;
     captureLunaCheckpoint?: boolean;
     externalProgress?: boolean;
@@ -179,6 +180,10 @@ async function run(message: RunMessage): Promise<void> {
   if (message.turn.conversationKey !== undefined && !/^[a-f0-9]{64}$/.test(message.turn.conversationKey)) {
     throw new Error("Browser helper conversation key is invalid");
   }
+  if (message.turn.hermesImageSession !== undefined
+    && (typeof message.turn.hermesImageSession !== "string" || !/^[a-f0-9]{64}$/.test(message.turn.hermesImageSession))) {
+    throw new Error("Browser helper Hermes image session is invalid");
+  }
   if (message.turn.compaction !== undefined && typeof message.turn.compaction !== "boolean") {
     throw new Error("Browser helper compaction flag is invalid");
   }
@@ -231,6 +236,7 @@ async function run(message: RunMessage): Promise<void> {
     ...(message.turn.retainConversation ? { retainConversation: true } : {}),
     ...(message.turn.requireRetainedConversation ? { requireRetainedConversation: true } : {}),
     ...(message.turn.conversationKey ? { conversationKey: message.turn.conversationKey } : {}),
+    ...(message.turn.hermesImageSession ? { hermesImageSession: message.turn.hermesImageSession } : {}),
     abortSignal: abortController.signal,
     ...(message.turn.compaction ? { compaction: true } : {}),
     ...(progress ? {

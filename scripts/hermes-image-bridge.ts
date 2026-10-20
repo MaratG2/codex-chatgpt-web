@@ -4,21 +4,25 @@
  * Input/output JSON travels over stdio. Signed URLs and bytes never enter model context.
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { getConfigDir } from "../src/config";
 import { connectLauncherBrowserHost } from "../src/launcher-browser-host";
 import { CHATGPT_ASSISTANT_TURN_SELECTOR } from "../src/chatgpt-session";
+import { resolveHermesImageSession } from "../src/adapters/chatgpt-web/hermes-image-session";
 
 async function main() {
   const input = JSON.parse(readFileSync(0, "utf8"));
   if (!/^[a-f0-9]{64}$/.test(input.session)) throw new Error("Invalid Hermes session");
   if (!["prepare", "collect"].includes(input.action)) throw new Error("Invalid image action");
-  const binding = JSON.parse(readFileSync(
-    join(getConfigDir(), "runtime", "hermes-image-sessions", `${input.session}.json`), "utf8"));
-  if (binding.version !== 1 || binding.session !== input.session) throw new Error("Invalid image binding");
+  const binding = resolveHermesImageSession(input.session);
   const connection = await connectLauncherBrowserHost(binding.descriptorPath, 12_000, binding.surfaceId);
   try {
+    const current = resolveHermesImageSession(input.session);
+    if (current.surfaceId !== binding.surfaceId || current.targetId !== binding.targetId
+      || current.conversationKey !== binding.conversationKey
+      || connection.descriptor.pid !== binding.hostPid
+      || connection.descriptor.endpoint !== binding.hostEndpoint) {
+      throw new Error("HERMES_IMAGE_BINDING_CHANGED: session ownership changed while connecting");
+    }
     const page = connection.page;
     const url = new URL(page.url());
     if (url.origin !== "https://chatgpt.com" || !/\/c\/[a-zA-Z0-9-]+\/?$/.test(url.pathname)) {

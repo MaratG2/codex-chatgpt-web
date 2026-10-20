@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { bindHermesImageSession } from "./hermes-image-session";
 import { normalizeChatGptProjectUrl } from "../../chatgpt-project";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -1370,6 +1371,8 @@ export interface BrowserTurn {
   retainConversation?: boolean;
   requireRetainedConversation?: boolean;
   conversationKey?: string;
+  /** Trusted Hermes identity, independent of serialized prompts and resume suffixes. */
+  hermesImageSession?: string;
   onPreparedSelected?: (reused: boolean) => void | Promise<void>;
   abortSignal?: AbortSignal;
   onHeartbeat?: () => void;
@@ -5266,18 +5269,13 @@ export class ChatGptBrowserWorker {
       });
       if (!maintenancePage && !launcherSurfaceId) managedPage = page;
       diagnosticPage = page;
-      // Bind the optional Hermes image exporter to this exact leased surface. The
-      // marker is inserted once by Hermes, not guessed from tab titles or recent chats.
-      const imageSession = /\bHERMES_IMAGE_SESSION=([a-f0-9]{64})\b/
-        .exec([prepared.text, ...(prepared.multipart?.parts ?? [])].join("\n"))?.[1];
-      if (imageSession && launcherSurfaceId && turn.retainConversation && turn.conversationKey) {
-        atomicWriteFile(join(getConfigDir(), "runtime", "hermes-image-sessions", `${imageSession}.json`),
-          JSON.stringify({
-            version: 1, session: imageSession, surfaceId: launcherSurfaceId,
-            conversationKey: turn.conversationKey,
-            descriptorPath: this.config.browserHostDescriptorPath,
-            createdAt: new Date().toISOString(),
-          }));
+      if (turn.hermesImageSession) {
+        if (!launcherSurfaceId || !turn.retainConversation || !turn.conversationKey
+          || !this.config.browserHostDescriptorPath) {
+          throw new Error("HERMES_IMAGE_BINDING_UNAVAILABLE: image session requires its retained launcher surface");
+        }
+        bindHermesImageSession(turn.hermesImageSession, launcherSurfaceId,
+          turn.conversationKey, this.config.browserHostDescriptorPath);
       }
       const rebindLauncherPage = async (
         attempt: number,
@@ -5333,6 +5331,10 @@ export class ChatGptBrowserWorker {
         turnConnection = connection.browser;
         page = connection.page;
         diagnosticPage = page;
+        if (turn.hermesImageSession) {
+          bindHermesImageSession(turn.hermesImageSession, launcherSurfaceId!,
+            turn.conversationKey!, this.config.browserHostDescriptorPath!);
+        }
         console.warn(
           `[chatgpt-web] browser turn ${turn.traceId} rebound its existing launcher page after a stalled DOM probe`,
         );
