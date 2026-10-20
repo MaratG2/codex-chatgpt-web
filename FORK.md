@@ -111,20 +111,26 @@ the launcher supervisor to reload the daemon without restarting the browser.
 No test or model call is part of this repair; the next scheduled run is the first
 live exercise of image generation.
 
-## Keep Hermes work tools separate from native Web image generation
+## GPT Image connector collection repair (21 October 2026)
 
-The 22:05 scheduled run bound its session successfully, but called
-`image_gen__imagegen` through Codex Native2. That generator saved a server file;
-it did not create the Web raster expected by the collector. Hermes-marked
-requests now expose only their actual `hermes_*` dynamic tools through the
-connector, without the generic Codex exec gateway or other native Codex tools.
-This restriction is scoped to Hermes sessions; ordinary Codex/Paperclip requests
-retain their normal registry. ChatGPT's own first-party tools remain separate.
+The first-party-only restriction introduced on 20 October was incorrect: the
+scheduled Web agent had already generated a genuine PNG using the registered
+Native2 image_gen.imagegen tool. Requiring an assistant DOM image discarded that
+successful result; disabling the generator caused NATIVE_WEB_IMAGE_UNAVAILABLE.
 
-The image exporter now distinguishes pending rendering from a terminal failure:
-it observes the same owned conversation briefly and returns `awaiting_render`,
-allowing the Hermes plugin's bounded collection window to continue without
-regeneration. No different-provider file is accepted as native Web provenance.
-The real image-generation route remains untested by this repair at the owner's
-request; deployment must not be presented as a successful end-to-end generation.
+Hermes-marked requests now expose hermes_* tools plus exactly image_gen.imagegen.
+The generic exec gateway and unrelated native work tools stay excluded. The
+maintained plugin in integrations/hermes/chatgpt-image (v1.1.0) binds prepare to the
+provider's exact task thread, records a rollout offset and unique prompt marker,
+and collects only the original PNG named by that matching completed generator
+call. No DOM rendering or signed browser download is needed. The Web model/chat,
+proxy settings and schedules are retained; no separately configured paid API is
+introduced. Provenance truthfully identifies GPT Image via Native2; quota behavior
+is not inferred from the ChatGPT plan.
 
+The PNG is copied byte-for-byte, with original preservation, changed-destination
+checks, bounded log-flush waiting and resumable PNG/provenance writes. Unrelated
+native tools, SVG, code-drawn replacements and extra chats remain disallowed.
+Keep connector.py with __init__.py/plugin.yaml during upgrades. No model test or
+extra production run is part of this repair; real generation was observed in a
+past scheduled run, while the new complete collection flow awaits a scheduled run.

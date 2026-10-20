@@ -1,19 +1,15 @@
-"""Two-phase native Web generation. Never starts a second LLM request or a new chat."""
+"""GPT Image through the existing Web agent's Native2 connector; no nested model turn."""
 from datetime import datetime, timezone
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-import base64
 import json
-import os
 import re
-import subprocess
 import time
 import uuid
+from . import connector
 
 ROOT = Path('/home/codexweb/experiment')
-BUN = Path('/home/codexweb/.codex-chatgpt-web/versions/6.1.11-marat.1-linux-x64/runtime/bun')
-BRIDGE = ROOT / 'launcher-fork/scripts/hermes-image-bridge.ts'
 STATE = ROOT / 'hermes-home/cache/chatgpt-image'
 WORKSPACES = ROOT / 'workspaces'
 
@@ -24,15 +20,6 @@ def _save_json(path, value):
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     temporary.chmod(0o600)
     temporary.replace(path)
-
-
-def _bridge(value):
-    result = subprocess.run([str(BUN), str(BRIDGE)], input=json.dumps(value),
-                            text=True, capture_output=True, timeout=70, cwd=BRIDGE.parent.parent)
-    if result.returncode:
-        # Do not return arbitrary stderr/stack traces with potentially signed resource URLs.
-        raise RuntimeError('ChatGPT image export failed: ' + result.stderr.strip().split('\n')[0][:300])
-    return json.loads(result.stdout)
 
 
 def _destination(raw):
@@ -51,6 +38,26 @@ def _session():
     if not session:
         raise ValueError('No bound Hermes session; refusing auxiliary conversation')
     return sha256(session.encode()).hexdigest()
+
+
+def _finish_save(state_path, record):
+    """Resume a partially committed PNG/provenance pair without regeneration."""
+    result = record['result']
+    destination = _destination(result['image'])
+    png = state_path.with_suffix('.original').read_bytes()
+    if sha256(png).hexdigest() != result['sha256']:
+        raise ValueError('IMAGE_CACHE_CHANGED: preserve source and inspect')
+    current = sha256(destination.read_bytes()).hexdigest() if destination.exists() else None
+    if current not in (record['previous_sha256'], result['sha256']):
+        raise ValueError('Destination changed while saving; refusing to overwrite newer work')
+    if current != result['sha256']:
+        temporary = destination.with_name(destination.name + '.' + record['request_id'] + '.tmp')
+        temporary.write_bytes(png)
+        temporary.replace(destination)
+    _save_json(destination.with_suffix('.provenance.json'), record['provenance_data'])
+    record['status'] = 'saved'
+    _save_json(state_path, record)
+    return result
 
 
 def handle(args, **kwargs):
@@ -79,26 +86,31 @@ def _handle(args):
         # Preparing twice must not silently abandon an unfinished native generation.
         for path in directory.glob('*.json'):
             previous = json.loads(path.read_text())
+            if previous.get('status') == 'saving':
+                return _finish_save(path, previous)
             if previous.get('status') == 'awaiting_native_generation':
                 return {'status': 'awaiting_native_generation', 'request_id': path.stem,
                         'output_path': previous['output_path'], 'generated': False,
+                        'prompt': previous.get('generation_prompt', previous['prompt']),
+                        'generation_route': previous.get('generation_route'),
                         'next_action': 'Finish or explicitly cancel this request before preparing another.'}
-        captured = _bridge({'action': 'prepare', 'session': session})
         request = uuid.uuid4().hex
+        captured = connector.prepare(session, request, prompt)
         old_hash = sha256(destination.read_bytes()).hexdigest() if destination.exists() else None
         _save_json(directory / (request + '.json'), {
-            'status': 'awaiting_native_generation', 'session': session, 'prompt': prompt,
+            'status': 'awaiting_native_generation', 'session': session, 'request_id': request, 'prompt': prompt,
             'output_path': str(destination), 'previous_sha256': old_hash,
             'created_at': datetime.now(timezone.utc).isoformat(), **captured})
         return {'status': 'awaiting_native_generation', 'request_id': request, 'generated': False,
-                'generation_route': 'chatgpt_native_only',
-                'next_action': 'Now call the first-party image generation tool declared by ChatGPT in THIS chat. '
-                'Do NOT invoke Codex Native/Native2 image_gen__imagegen or any guessed connector wire name: '
-                'that is a separate generator whose server PNG is not a Web-chat image. '
-                'Await and display the actual native tool result using its declared image-output helper. '
-                'Then call chatgpt_image action collect with this request_id. Do not use code drawing, screenshots, '
-                'another chat or an API. If the first-party native tool is absent/refused, cancel with the actual blocker.',
-                'prompt': prompt, 'output_path': str(destination)}
+                'generation_route': captured['generation_route'],
+                'generator_tool': 'image_gen__imagegen',
+                'next_action': 'In this SAME task conversation, invoke the registered GPT Image tool through '
+                'Codex Native2 codex_tool_call using wire_name image_gen__imagegen and its CURRENT turn binding. '
+                'Use the returned prompt EXACTLY, including the internal reference, and transparent_background=false. '
+                'Wait for completion, then call chatgpt_image collect with this request_id. The collector reads the '
+                'original PNG on the server: no image needs to appear in the browser DOM. Do not generate again '
+                'while collection is pending. Do not use SVG, code drawing, another chat or a separate paid API.',
+                'prompt': captured['generation_prompt'], 'output_path': str(destination)}
     request = args.get('request_id', '')
     if len(request) != 32 or any(c not in '0123456789abcdef' for c in request):
         raise ValueError('Invalid request_id')
@@ -106,6 +118,8 @@ def _handle(args):
     record = json.loads(state_path.read_text())
     if record['session'] != session:
         raise ValueError('Image request belongs to another session')
+    if record['status'] == 'saving' and args.get('action') == 'collect':
+        return _finish_save(state_path, record)
     if record['status'] == 'saved':
         saved = record['result']
         if sha256(Path(saved['image']).read_bytes()).hexdigest() != saved['sha256']:
@@ -114,39 +128,32 @@ def _handle(args):
     if args.get('action') == 'cancel':
         record.update(status='blocked', reason=str(args.get('reason') or 'Native image generation unavailable'))
         _save_json(state_path, record)
-        return {'status': 'blocked', 'success': False, 'error': record['reason'], 'generated': False}
+        return {'status': 'blocked', 'success': False, 'error': record['reason'], 'image_saved': False,
+                'next_action': 'Preserve any generator output; cancellation does not delete generated files.'}
     if args.get('action') != 'collect' or record['status'] != 'awaiting_native_generation':
         raise ValueError('Request is not awaiting collection')
-    # Diagnose a connector-generated PNG instead of mislabelling it a DOM failure.
-    provider_record = ROOT / 'hermes-home/plugins/model-providers/chatgpt-web-local/conversation-state' / (session + '.json')
-    if provider_record.exists():
-        thread = json.loads(provider_record.read_text()).get('thread_id', '')
-        if re.fullmatch(r'[a-f0-9-]{36}', thread):
-            native_dir = Path.home() / '.codex/generated_images' / thread
-            prepared_at = datetime.fromisoformat(record['created_at']).timestamp()
-            if any(p.stat().st_mtime >= prepared_at for p in native_dir.glob('*.png')):
-                return {'success': False, 'status': 'blocked', 'error_code': 'WRONG_IMAGE_GENERATION_ROUTE',
-                        'error': 'A Codex connector image was created for this thread. It is not native Web generation.',
-                        'fallback_allowed': False, 'generated_via_web': False,
-                        'next_action': 'Preserve that original file; do not label or import it as ChatGPT Web output. '
-                        'Use only the first-party image tool declared directly by ChatGPT.'}
+    if record.get('generation_route') != 'chatgpt-web-via-codex-native2-gpt-image':
+        raise ValueError('IMAGE_REQUEST_OLD_ROUTE: preserve old request; prepare a new request with the current route')
     if 'collection_started_at' not in record:
         record['collection_started_at'] = time.time()
         _save_json(state_path, record)
-    data = _bridge({'action': 'collect', 'session': session, 'conversation': record['conversation'],
-                    'baseline': record['baseline'], 'index': args.get('index')})
-    if data.get('status') == 'awaiting_render':
+    data = connector.collect(record, session)
+    # Codex may notify its continuation slightly before flushing the tool output.
+    # Wait locally for that durable output; do not spend another generation call.
+    deadline = time.monotonic() + 10
+    while data is None and time.monotonic() < deadline:
+        time.sleep(0.5)
+        data = connector.collect(record, session)
+    if data is None:
         if time.time() - record['collection_started_at'] >= 120:
-            return {'success': False, 'status': 'blocked', 'error_code': 'WEB_IMAGE_RENDER_TIMEOUT',
-                    'error': 'No new native Web image became visible within the collection window.',
-                    'fallback_allowed': False, 'generated_via_web': False}
-        return {'status': 'awaiting_render', 'request_id': request, 'generated': False,
-                'next_action': 'Call collect again for this same request_id after the native result renders. '
-                'Do not call generation again or cancel solely because rendering is pending. '
+            return {'success': False, 'status': 'blocked', 'error_code': 'IMAGE_OUTPUT_NOT_RECORDED',
+                    'error': 'No completed GPT Image output matching this prepared request was recorded.',
+                    'fallback_allowed': False, 'generation_confirmed': False}
+        return {'status': 'awaiting_tool_output', 'request_id': request, 'generation_confirmed': False,
+                'next_action': 'Call collect again for this same request_id after the generator completes. '
+                'Do not call generation again or cancel solely because the output log is pending. '
                 'The collection window is bounded to 120 seconds.', 'retry_after_seconds': 5}
-    if data.get('status') == 'choose_image':
-        return data
-    raw = base64.b64decode(data['base64'], validate=True)
+    raw = data.pop('raw')
     from PIL import Image
     with Image.open(BytesIO(raw)) as image:
         if image.format not in ('PNG', 'JPEG', 'WEBP') or min(image.size) < 512:
@@ -154,11 +161,10 @@ def _handle(args):
         if image.width * image.height > 40_000_000:
             raise ValueError('Image dimensions exceed the export limit')
         image.load()
-        output = BytesIO()
-        # Format conversion only: no drawing, resizing, cropping or screenshotting.
-        image.save(output, format='PNG')
+        if image.format != 'PNG':
+            raise ValueError('GPT Image output is not PNG; preserve original and inspect')
         width, height = image.size
-    png = output.getvalue()
+    png = raw  # Copy exactly; do not re-encode, draw, crop, resize or screenshot.
     digest = sha256(png).hexdigest()
     destination = _destination(record['output_path'])
     current_hash = sha256(destination.read_bytes()).hexdigest() if destination.exists() else None
@@ -171,35 +177,28 @@ def _handle(args):
     original.write_bytes(raw)
     original.chmod(0o600)
     provenance = {
-        'provider': 'chatgpt-web-native-image', 'model': 'ChatGPT Image (UI-selected; exact version not exposed)',
-        'request_id': request, 'prompt': record['prompt'], 'generated_at': datetime.now(timezone.utc).isoformat(),
-        'source_key_sha256': data['source_key_sha256'], 'original_sha256': sha256(raw).hexdigest(),
-        'generated_image_label': data['generated_image_label'],
+        **data, 'request_id': request, 'prompt': record['prompt'], 'saved_at': datetime.now(timezone.utc).isoformat(),
         'sha256': digest, 'width': width, 'height': height,
-        'method': 'native ChatGPT generation; original displayed raster downloaded in its browser session',
-        'conversion': 'PNG encoding only; no programmatic drawing',
+        'conversion': 'none; original PNG bytes preserved',
     }
-    temporary = destination.with_name(destination.name + '.' + request + '.tmp')
-    temporary.write_bytes(png)
-    temporary.replace(destination)
-    _save_json(destination.with_suffix('.provenance.json'), provenance)
     result = {'success': True, 'status': 'saved', 'image': str(destination), 'sha256': digest,
               'width': width, 'height': height, 'provider': provenance['provider'],
               'provenance': str(destination.with_suffix('.provenance.json')),
               'next_action': 'Inspect this file with vision_analyze. Review actual text and composition before accepting.'}
-    record.update(status='saved', result=result)
+    record.update(status='saving', result=result, provenance_data=provenance)
     _save_json(state_path, record)
-    return result
+    return _finish_save(state_path, record)
 
 
 def register(ctx):
     ctx.register_tool(
         name='chatgpt_image', toolset='chatgpt_image', handler=handle, emoji='🎨',
-        description='Prepare and collect genuine GPT Image artwork in the current ChatGPT Web chat.',
+        description='Prepare and collect genuine GPT Image artwork through the current Web agent and Native2.',
         schema={'name': 'chatgpt_image', 'description':
-            'Two-phase ChatGPT Web image tool. prepare records the prompt/output PNG and current images; '
-            'then YOU must call ChatGPT native image generation in this same conversation; '
-            'collect saves only a new assistant raster and provenance. prepare is not generation or success. '
+            'Two-phase GPT Image tool. prepare records a prompt/output PNG and the exact current task thread; '
+            'then YOU must call the registered Native2 image_gen__imagegen tool with the returned exact prompt; '
+            'collect verifies its completed tool output and saves the original server PNG plus provenance. '
+            'Browser image rendering is not required. prepare is not generation or success. '
             'Never draw SVG/HTML/Canvas as a substitute. cancel records a real unavailability/refusal. '
             'No API keys, paid API requests, new tabs or new model chats.',
             'parameters': {'type': 'object', 'properties': {
@@ -207,4 +206,4 @@ def register(ctx):
                 'prompt': {'type': 'string'}, 'output_path': {'type': 'string'},
                 'request_id': {'type': 'string'}, 'index': {'type': 'integer', 'minimum': 0},
                 'reason': {'type': 'string'}}, 'required': ['action']}},
-        check_fn=lambda: BUN.is_file() and BRIDGE.is_file(), requires_env=[], is_async=False)
+        check_fn=lambda: connector.PROVIDER_STATE.is_dir(), requires_env=[], is_async=False)

@@ -434,13 +434,14 @@ export function createChatGptWebAdapter(
     const identity = extractChatGptTurnIdentity(parsed);
     const hermesImageSession = hermesImageSessionForRequest(parsed);
     if (hermesImageSession && environment) {
-      // A Hermes turn may only invoke its registered dynamic tools. In particular,
-      // the generic exec gateway must not expose Codex's separate image generator.
+      // Hermes owns work tools; GPT Image is the one explicit native exception.
+      // Expose the registered generator itself, never the unrestricted exec gateway.
       const hermesTools = environment.tools.filter(tool => !tool.namespace && tool.name.startsWith("hermes_"));
       if (!hermesTools.length) {
         throw new Error("HERMES_TOOL_ROUTE_UNAVAILABLE: no registered Hermes dynamic tools; native fallback disabled");
       }
-      environment = { ...environment, tools: hermesTools };
+      const imageTools = environment.tools.filter(tool => tool.namespace === "image_gen" && tool.name === "imagegen");
+      environment = { ...environment, tools: [...hermesTools, ...imageTools] };
     }
     const captureLunaCheckpoint = parsed.modelId === CHATGPT_WEB_LUNA_MODEL_ID
       && !experimentalBiggerContext

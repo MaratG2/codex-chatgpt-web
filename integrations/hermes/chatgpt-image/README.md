@@ -1,49 +1,35 @@
-# GPT Image through the existing ChatGPT Web conversation
+# GPT Image from the existing ChatGPT Web agent
 
-This local Hermes plugin uses a two-phase handoff, not a synchronous second LLM
-request inside a pending tool call. `chatgpt_image(prepare)` records the prompt,
-destination, and existing assistant image identities. ChatGPT is explicitly
-instructed to invoke its native image-generation capability in the same chat.
-`collect` downloads the newly displayed generated raster and saves PNG plus
-provenance. Preparation is never reported as a generated image.
+Version 1.1.0 fixes the scheduled-run failure. The Web agent previously called the
+registered Native2 image_gen__imagegen tool successfully; its genuine PNG was saved
+under .codex/generated_images/<thread>/. The collector incorrectly looked only
+for an assistant image in the Web page. Version 1.0.2 then mistakenly disabled
+that working generator. That restriction is removed.
 
-The maintained launcher worker binds a private Hermes session hash to its exact
-leased browser surface. `scripts/hermes-image-bridge.ts` uses that binding and the
-existing browser's proxy/authentication, checks the saved conversation has not
-changed, rejects baseline images and unlabelled images, and downloads the raster
-resource through the page. It never opens a tab, sends a prompt, screenshots a
-page, exports cookies, or calls an image API. The model receives only a saved
-workspace path, hashes and dimensions, not signed URLs or image base64.
+The launcher exposes Hermes dynamic tools plus the exact native image_gen.imagegen
+tool. The generic exec gateway and unrelated native work tools remain excluded for
+Hermes; ordinary Codex/Paperclip inventories are unchanged. The Web agent invokes
+GPT Image in its existing task via Native2 with the current connector binding.
+No additional reasoning chat or separately configured paid image API is created.
+The tool's account quota is not inferred here.
 
-Configuration: enable the `chatgpt-image` plugin and include its toolset for Hermes.
-The custom Web model provider includes the native-image exception and binding
-marker in initial instructions. No FAL/OpenRouter/OpenAI image API key is used.
-No change to `image_gen.provider` is needed: stock synchronous `image_generate`
-cannot safely make a nested request into the same busy ChatGPT conversation.
+prepare binds a unique request and exact prompt to the current Hermes provider's
+Codex thread and rollout-log offset. The agent passes that prompt unchanged to
+image_gen__imagegen, awaits its result, then calls collect. Collection accepts only
+the original PNG named by a completed image_gen.imagegen call in that same thread,
+after prepare, with the matching request prompt. No DOM image, signed download URL
+or screenshot is used. Stale outputs, changed thread/log bindings, duplicate
+calls, symlinks, unexpected paths and changed destinations are rejected.
 
-SVG, HTML/Canvas drawing and screenshots are not valid fallbacks. PIL is used only
-to decode the fetched raster and encode PNG, never to draw, crop or resize it.
-The `*.provenance.json` files record the observed generated-image label and hashes;
-the exact internal GPT Image version is not inferred from a Web subscription.
+PNG bytes are preserved exactly after decoding/dimension checks. The original
+remains in Codex storage and a private request cache. Workspace provenance records
+the generator call, prompt, hashes, dimensions and gpt-image-via-codex-native2
+provider. It is not labelled first-party browser generation. SVG/code-drawn
+replacements remain prohibited.
 
-Limits: native generation must be available in the chosen ChatGPT Web mode.
-Image collection depends on current assistant DOM/image labels and browser fetch
-permissions. An unavailable native tool, unknown label, CORS/download failure or
-rate limit is an explicit blocker. No automatic replacement chat or paid fallback.
-Deployment does not itself verify generation; no tests or model runs were requested.
-
-The 22:05 scheduled run exposed a routing error: it called
-`Codex Native2.codex_tool_call(wire_name="image_gen__imagegen")`, which produced a
-PNG under `.codex/generated_images/<thread>/`. That connector result is not a
-first-party Web-chat raster. It must not be labelled/imported as Web output.
-The launcher now restricts Hermes-bound tool inventories to registered `hermes_*`
-tools, excluding the generic Codex gateway. Native Web generation must be invoked
-through the first-party image tool actually declared by ChatGPT itself. An absent
-tool is `NATIVE_WEB_IMAGE_UNAVAILABLE`, not an export error or permission to guess
-a connector tool name.
-
-`collect` observes the same page for up to 15 seconds and returns `awaiting_render`
-if the native result has not mounted yet. It preserves the request and permits
-collection (not generation) retries for a bounded 120-second window. A new Codex
-PNG in this thread produces `WRONG_IMAGE_GENERATION_ROUTE`, preserving the original
-file without substituting it for requested Web output.
+Collection waits briefly for log flush, then returns awaiting_tool_output for
+bounded retries rather than launching another generation. Success requires saved,
+visual review and normal Git commit/push. The AI VPN/proxy configuration is
+retained; local collection makes no network call. No tests or model runs are part
+of deployment. Connector/service limits, refusals and output quality remain
+external conditions. Preserve partial results and report actual failures.
