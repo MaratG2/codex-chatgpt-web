@@ -111,3 +111,20 @@ the launcher supervisor to reload the daemon without restarting the browser.
 No test or model call is part of this repair; the next scheduled run is the first
 live exercise of image generation.
 
+## Keep Hermes work tools separate from native Web image generation
+
+The 22:05 scheduled run bound its session successfully, but called
+`image_gen__imagegen` through Codex Native2. That generator saved a server file;
+it did not create the Web raster expected by the collector. Hermes-marked
+requests now expose only their actual `hermes_*` dynamic tools through the
+connector, without the generic Codex exec gateway or other native Codex tools.
+This restriction is scoped to Hermes sessions; ordinary Codex/Paperclip requests
+retain their normal registry. ChatGPT's own first-party tools remain separate.
+
+The image exporter now distinguishes pending rendering from a terminal failure:
+it observes the same owned conversation briefly and returns `awaiting_render`,
+allowing the Hermes plugin's bounded collection window to continue without
+regeneration. No different-provider file is accepted as native Web provenance.
+The real image-generation route remains untested by this repair at the owner's
+request; deployment must not be presented as a successful end-to-end generation.
+

@@ -32,7 +32,7 @@ async function main() {
     if (input.action === "collect" && input.conversation !== conversation) {
       throw new Error("Conversation changed after image preparation");
     }
-    const candidates = await page.evaluate(({ selector }) => {
+    const inspectCandidates = () => page.evaluate(({ selector }) => {
       const roots = Array.from(document.querySelectorAll(selector));
       const seen = new Set<HTMLImageElement>();
       const result: { src: string; key: string; width: number; height: number; alt: string; generatedLabel: boolean }[] = [];
@@ -61,12 +61,26 @@ async function main() {
       }
       return result;
     }, { selector: CHATGPT_ASSISTANT_TURN_SELECTOR });
+    let candidates = await inspectCandidates();
     if (input.action === "prepare") {
       return { conversation, baseline: candidates.map(c => c.key) };
     }
     const baseline = new Set(input.baseline);
-    const fresh = candidates.filter(c => !baseline.has(c.key));
-    if (!fresh.length) throw new Error("No new assistant raster found. Native generation or rendering has not completed; no file saved.");
+    let fresh = candidates.filter(c => !baseline.has(c.key));
+    // A native tool can finish before its image mounts/loads. Observe the same page
+    // briefly; never regenerate, navigate, or turn this transient state into failure.
+    const renderDeadline = Date.now() + 15_000;
+    while (!fresh.length && Date.now() < renderDeadline) {
+      await new Promise(resolve => setTimeout(resolve, 1_000));
+      const owned = resolveHermesImageSession(input.session);
+      if (owned.surfaceId !== binding.surfaceId || owned.targetId !== binding.targetId
+        || page.url().split(/[?#]/)[0] !== conversation) {
+        throw new Error("HERMES_IMAGE_BINDING_CHANGED: conversation changed while waiting for its image");
+      }
+      candidates = await inspectCandidates();
+      fresh = candidates.filter(c => !baseline.has(c.key));
+    }
+    if (!fresh.length) return { status: "awaiting_render", conversation };
     if (fresh.length !== 1 && !Number.isInteger(input.index)) {
       return { status: "choose_image", candidates: fresh.map((c, index) =>
         ({ index, width: c.width, height: c.height, alt: c.alt })) };

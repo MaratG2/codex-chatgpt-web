@@ -432,6 +432,16 @@ export function createChatGptWebAdapter(
       ? { localTools: true }
       : resolveChatGptWebModelMode(parsed.modelId, parsed.options.reasoning, turnCapabilities);
     const identity = extractChatGptTurnIdentity(parsed);
+    const hermesImageSession = hermesImageSessionForRequest(parsed);
+    if (hermesImageSession && environment) {
+      // A Hermes turn may only invoke its registered dynamic tools. In particular,
+      // the generic exec gateway must not expose Codex's separate image generator.
+      const hermesTools = environment.tools.filter(tool => !tool.namespace && tool.name.startsWith("hermes_"));
+      if (!hermesTools.length) {
+        throw new Error("HERMES_TOOL_ROUTE_UNAVAILABLE: no registered Hermes dynamic tools; native fallback disabled");
+      }
+      environment = { ...environment, tools: hermesTools };
+    }
     const captureLunaCheckpoint = parsed.modelId === CHATGPT_WEB_LUNA_MODEL_ID
       && !experimentalBiggerContext
       && !parsed._compactionRequest
@@ -778,7 +788,7 @@ export function createChatGptWebAdapter(
     };
     const browserTurn = cancellableBrowserTurn(trackBrowserOwner(finalizeCheckpoint(worker.run({
       traceId,
-      ...(retainConversation ? { hermesImageSession: hermesImageSessionForRequest(parsed) } : {}),
+      ...(retainConversation ? { hermesImageSession } : {}),
       modelId: parsed.modelId,
       reasoning: parsed.options.reasoning,
       ...(parsed._chatgptModelFamily ? { modelFamily: parsed._chatgptModelFamily } : {}),

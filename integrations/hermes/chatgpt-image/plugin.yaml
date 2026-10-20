@@ -1,0 +1,5 @@
+name: chatgpt-image
+version: 1.0.2
+description: Native ChatGPT image generation handoff and original raster collection in the current Web conversation.
+author: Local deployment
+provides_tools: [chatgpt_image]
