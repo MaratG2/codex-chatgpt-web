@@ -5266,6 +5266,19 @@ export class ChatGptBrowserWorker {
       });
       if (!maintenancePage && !launcherSurfaceId) managedPage = page;
       diagnosticPage = page;
+      // Bind the optional Hermes image exporter to this exact leased surface. The
+      // marker is inserted once by Hermes, not guessed from tab titles or recent chats.
+      const imageSession = /\bHERMES_IMAGE_SESSION=([a-f0-9]{64})\b/
+        .exec([prepared.text, ...(prepared.multipart?.parts ?? [])].join("\n"))?.[1];
+      if (imageSession && launcherSurfaceId && turn.retainConversation && turn.conversationKey) {
+        atomicWriteFile(join(getConfigDir(), "runtime", "hermes-image-sessions", `${imageSession}.json`),
+          JSON.stringify({
+            version: 1, session: imageSession, surfaceId: launcherSurfaceId,
+            conversationKey: turn.conversationKey,
+            descriptorPath: this.config.browserHostDescriptorPath,
+            createdAt: new Date().toISOString(),
+          }));
+      }
       const rebindLauncherPage = async (
         attempt: number,
         cause: Error,

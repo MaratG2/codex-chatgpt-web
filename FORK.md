@@ -71,3 +71,22 @@ for the initial fork so a source push does not launch tests or release jobs.
 No test suites, browser smoke tests or model requests are authorized for this change.
 Compilation/build results are reported separately in the deployment report. Do not
 claim successful project chat delivery until the owner authorizes a real run.
+# Hermes native image handoff (20 October 2026)
+
+`browser-worker.ts` can bind an explicit `HERMES_IMAGE_SESSION=<sha256>` marker
+from the initial Hermes instructions to the exact leased browser surface.
+The private mapping is written under `runtime/hermes-image-sessions/`.
+`scripts/hermes-image-bridge.ts` prepares an image baseline and exports a newly
+rendered, generated-labelled assistant raster from that same saved conversation.
+It does not create chats, send prompts, take screenshots, export credentials or
+invoke the native Codex/API image route. Downloads run inside the existing browser
+and inherit its configured network/proxy route.
+
+The Hermes-side `chatgpt-image` plugin and provider exception are maintained in
+the server deployment sources. Its workflow is prepare → native ChatGPT image
+generation in the current conversation → collect → visual inspection. Generation
+availability and DOM compatibility have **not** been live-tested in this deployment,
+at the owner's request. Failures must remain explicit; no SVG or paid API fallback.
+Retain these additions when merging upstream; normal `build-marat.sh` includes the
+worker changes. The standalone image helper runs from the maintained source tree.
+
