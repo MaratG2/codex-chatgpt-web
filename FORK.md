@@ -134,3 +134,13 @@ native tools, SVG, code-drawn replacements and extra chats remain disallowed.
 Keep connector.py with __init__.py/plugin.yaml during upgrades. No model test or
 extra production run is part of this repair; real generation was observed in a
 past scheduled run, while the new complete collection flow awaits a scheduled run.
+
+## Mandatory shared gallery template (21 October 2026)
+
+Hermes image plugin 1.2.0 validates AI Education ad gallery slots against the
+owner-approved branding/gallery-template.json. GPT Image must receive the actual
+reference file paths; collection checks that they were used and their hashes have
+not changed. Slots marked reuse are copied byte-for-byte without generation.
+The exact originals live in the AI Education repository, not this runtime fork.
+The provider, plugin and scheduled Packager share this contract. New workers load
+the installed plugin; no daemon/browser restart or test/model run is required.

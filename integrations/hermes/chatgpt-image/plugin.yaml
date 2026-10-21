@@ -1,5 +1,5 @@
 name: chatgpt-image
-version: 1.1.0
+version: 1.2.0
 description: GPT Image via the current ChatGPT Web agent and Native2, with verified original PNG collection.
 author: Local deployment
 provides_tools: [chatgpt_image]

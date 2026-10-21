@@ -7,6 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 import json
 import re
+from . import style
 
 ROOT = Path('/home/codexweb/experiment')
 CODEX = Path.home() / '.codex'
@@ -72,6 +73,7 @@ def collect(record, session):
                 if marker in args.get('prompt', ''):
                     if args['prompt'].strip() != record['generation_prompt'].strip():
                         raise ValueError('IMAGE_PROMPT_MISMATCH: use the exact prompt returned by prepare')
+                    style.validate_call(record, args)
                     calls[payload['call_id']] = event.get('timestamp')
             elif payload.get('type') == 'function_call_output':
                 call = payload.get('call_id')

@@ -33,3 +33,20 @@ visual review and normal Git commit/push. The AI VPN/proxy configuration is
 retained; local collection makes no network call. No tests or model runs are part
 of deployment. Connector/service limits, refusals and output quality remain
 external conditions. Preserve partial results and report actual failures.
+
+## Shared gallery template contract (1.2.0)
+
+AI Education ad PNGs now require branding/gallery-template.json and a template_slot.
+The plugin reads and hashes the real owner-approved originals. Adapt slots must
+pass the exact referenced_image_paths returned by prepare to GPT Image; collect
+validates actual tool arguments and reference hashes. Palette-only text prompts
+are not accepted as template compliance. Visual acceptance additionally requires
+comparison with the corresponding original layout and content blocks.
+
+Reuse slots return saved directly from prepare after copying the approved master
+byte-for-byte, with reuse provenance and generated=false. Do not call GPT Image
+for those results. The owner selected the original review slide and requested one
+new generic consultation master without the photo wording or bottom CTA; these
+are common assets for every course. Only slides 1–4 are adapted per course.
+
+Keep style.py installed beside connector.py and __init__.py when upgrading.
