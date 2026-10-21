@@ -1,0 +1,5 @@
+name: chatgpt-examples
+version: 1.0.0
+description: Record educational text examples from the current bound ChatGPT Web model, without nested model calls or browser tabs.
+author: Local deployment
+provides_tools: [chatgpt_example]
